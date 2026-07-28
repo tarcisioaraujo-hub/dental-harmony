@@ -41,6 +41,17 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+// Helper para formatar a data ISO "YYYY-MM-DD" para "DD/MM/YYYY" na exibição
+function formatarDataBR(dataIso: string) {
+  if (!dataIso) return "";
+  if (dataIso.includes("/")) return dataIso;
+  const parts = dataIso.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dataIso;
+}
+
 function AgendarPage() {
   const qc = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -52,14 +63,22 @@ function AgendarPage() {
     queryFn: agendaService.listarHorariosDisponiveis,
   });
 
+  // Agrupa os horários por data tratando diferenças de case ("DISPONÍVEL", "Disponível", "disponivel")
   const grouped = useMemo(() => {
     const map = new Map<string, { dia: string; horarios: string[] }>();
+    
     for (const h of horarios) {
-      if (h.status !== "Disponível") continue;
+      const statusClean = String(h.status || "").trim().toLowerCase();
+      // Aceita variações de escrita
+      if (!statusClean.includes("dispon") && statusClean !== "livre") continue;
+
       const cur = map.get(h.data) ?? { dia: h.dia, horarios: [] };
-      cur.horarios.push(h.horario);
+      if (!cur.horarios.includes(h.horario)) {
+        cur.horarios.push(h.horario);
+      }
       map.set(h.data, cur);
     }
+    
     return Array.from(map.entries()).map(([data, v]) => ({ data, ...v }));
   }, [horarios]);
 
@@ -125,8 +144,8 @@ function AgendarPage() {
                   <div key={g.data} className="border rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <div className="font-semibold">{g.data}</div>
-                        <div className="text-sm text-muted-foreground">{g.dia}</div>
+                        <div className="font-semibold text-lg">{formatarDataBR(g.data)}</div>
+                        <div className="text-sm text-muted-foreground capitalize">{g.dia}</div>
                       </div>
                       <Badge variant="secondary">{g.horarios.length} disponíveis</Badge>
                     </div>
@@ -136,12 +155,13 @@ function AgendarPage() {
                         return (
                           <button
                             key={h}
+                            type="button"
                             onClick={() => setSelected({ data: g.data, horario: h })}
                             className={cn(
                               "px-3 py-2 rounded-md border text-sm font-medium transition-colors",
                               isSel
                                 ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-card hover:bg-secondary",
+                                : "bg-card hover:bg-secondary"
                             )}
                           >
                             {h}
@@ -167,7 +187,7 @@ function AgendarPage() {
               <CardTitle>2. Seus dados</CardTitle>
               {selected && (
                 <p className="text-sm text-muted-foreground">
-                  {selected.data} às {selected.horario}
+                  {formatarDataBR(selected.data)} às {selected.horario}
                 </p>
               )}
             </CardHeader>
@@ -232,7 +252,7 @@ function AgendarPage() {
               </div>
               <h2 className="mt-4 text-2xl font-bold">Consulta confirmada!</h2>
               <p className="mt-2 text-muted-foreground">
-                {selected && <>Sua consulta é em <strong>{selected.data}</strong> às <strong>{selected.horario}</strong>.</>}
+                {selected && <>Sua consulta é em <strong>{formatarDataBR(selected.data)}</strong> às <strong>{selected.horario}</strong>.</>}
               </p>
               <div className="mt-4 inline-block rounded-lg bg-secondary px-4 py-2 text-sm">
                 Protocolo: <strong>{protocolo}</strong>
@@ -290,7 +310,7 @@ function Stepper({ step }: { step: 1 | 2 | 3 }) {
                 "h-8 w-8 grid place-items-center rounded-full text-sm font-semibold border",
                 done && "bg-primary text-primary-foreground border-primary",
                 active && "bg-primary/10 text-primary border-primary",
-                !done && !active && "bg-card text-muted-foreground",
+                !done && !active && "bg-card text-muted-foreground"
               )}
             >
               {n}

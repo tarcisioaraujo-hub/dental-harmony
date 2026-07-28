@@ -1,43 +1,106 @@
-import { apiGet, apiPost } from "@/lib/api";
 import type { Agendamento, HorarioDisponivel } from "@/types/agenda";
 
+// Pega a URL da variável de ambiente com Fallback seguro
+const getApiUrl = () => {
+  const url = import.meta.env.VITE_API_URL || "";
+  return url.trim();
+};
+
 export const agendaService = {
-  listarHorariosDisponiveis: async () => {
-    // Busca a resposta do backend
-    const res: any = await apiGet("horarios-disponiveis");
-    // Se a API retornou o padrão { ok: true, data: [...] }, extrai o data
-    if (res && res.ok && Array.isArray(res.data)) {
-      return res.data as HorarioDisponivel[];
+  async listarHorariosDisponiveis(): Promise<HorarioDisponivel[]> {
+    const baseUrl = getApiUrl();
+    if (!baseUrl) {
+      throw new Error("URL da API não configurada no VITE_API_URL");
     }
-    // Se res já for o array direto (fallback)
-    if (Array.isArray(res)) {
-      return res as HorarioDisponivel[];
+
+    // Monta a requisição apontando diretamente para o Google Apps Script
+    const response = await fetch(`${baseUrl}?action=horarios-disponiveis`, {
+      method: "GET",
+      redirect: "follow",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Erro na rede: ${response.status}`);
     }
-    throw new Error(res?.error || "Formato de dados de horários inválido");
+
+    const result = await response.json();
+
+    // Trata o encapsulamento { ok: true, data: [...] } retornado pelo Apps Script
+    if (result && result.ok && Array.isArray(result.data)) {
+      return result.data as HorarioDisponivel[];
+    }
+
+    if (Array.isArray(result)) {
+      return result as HorarioDisponivel[];
+    }
+
+    throw new Error(result?.error || "Formato de dados inválido retornado pela API");
   },
 
-  agendar: async (payload: Omit<Agendamento, "dataAgendamento" | "status" | "protocolo">) => {
-    const res: any = await apiPost("agendar", payload);
-    return (res?.data || res) as Agendamento;
+  async agendar(
+    payload: Omit<Agendamento, "dataAgendamento" | "status" | "protocolo">
+  ): Promise<Agendamento> {
+    const baseUrl = getApiUrl();
+    const response = await fetch(baseUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ action: "agendar", ...payload }),
+      redirect: "follow",
+    });
+
+    const result = await response.json();
+    if (!result.ok) throw new Error(result.error || "Erro ao agendar");
+    return result.data as Agendamento;
   },
 
-  cancelar: async (payload: { nomeCompleto: string; cpf: string }) => {
-    const res: any = await apiPost("cancelar", payload);
-    return (res?.data || res) as { cancelado: boolean };
+  async cancelar(payload: { nomeCompleto: string; cpf: string }): Promise<{ cancelado: boolean }> {
+    const baseUrl = getApiUrl();
+    const response = await fetch(baseUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ action: "cancelar", ...payload }),
+      redirect: "follow",
+    });
+
+    const result = await response.json();
+    if (!result.ok) throw new Error(result.error || "Erro ao cancelar");
+    return result.data as { cancelado: boolean };
   },
 
-  reagendar: async (payload: {
+  async reagendar(payload: {
     nomeCompleto: string;
     cpf: string;
     novaData: string;
     novoHorario: string;
-  }) => {
-    const res: any = await apiPost("reagendar", payload);
-    return (res?.data || res) as Agendamento;
+  }): Promise<Agendamento> {
+    const baseUrl = getApiUrl();
+    const response = await fetch(baseUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ action: "reagendar", ...payload }),
+      redirect: "follow",
+    });
+
+    const result = await response.json();
+    if (!result.ok) throw new Error(result.error || "Erro ao reagendar");
+    return result.data as Agendamento;
   },
 
-  buscarConsulta: async (params: { nomeCompleto: string; cpf: string }) => {
-    const res: any = await apiGet("buscar-consulta", params);
-    return (res?.data || res) as Agendamento;
+  async buscarConsulta(params: { nomeCompleto: string; cpf: string }): Promise<Agendamento> {
+    const baseUrl = getApiUrl();
+    const query = new URLSearchParams({
+      action: "buscar-consulta",
+      nomeCompleto: params.nomeCompleto,
+      cpf: params.cpf,
+    }).toString();
+
+    const response = await fetch(`${baseUrl}?${query}`, {
+      method: "GET",
+      redirect: "follow",
+    });
+
+    const result = await response.json();
+    if (!result.ok) throw new Error(result.error || "Consulta não encontrada");
+    return result.data as Agendamento;
   },
 };

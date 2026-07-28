@@ -1,227 +1,532 @@
 /**
- * OdontoAgenda — Google Apps Script (Web App / API REST)
+ * OdontoAgenda — API REST em Google Apps Script + Google Sheets
  *
- * Deploy:
- *   1. Cole este arquivo em um projeto Apps Script (script.google.com).
- *   2. Ajuste SHEET_DISPONIBILIDADE_ID e SHEET_AGENDAMENTOS_ID.
- *   3. Deploy → Nova implantação → Tipo: App da Web
- *        - Executar como: Eu
- *        - Quem tem acesso: Qualquer pessoa
- *   4. Copie a URL /exec e salve como VITE_API_URL no front.
+ * COMO REIMPLANTAR CORRETAMENTE
+ * 1) Apps Script → substitua TODO o conteúdo de Code.gs por este arquivo.
+ * 2) Clique em Salvar.
+ * 3) Clique em Executar uma vez a função testeDiagnostico para autorizar o acesso às planilhas.
+ * 4) Implantar → Gerenciar implantações → Editar (ícone de lápis).
+ * 5) Selecione uma NOVA VERSÃO.
+ * 6) Tipo: App da Web.
+ * 7) Executar como: Eu.
+ * 8) Quem pode acessar: Qualquer pessoa.
+ * 9) Implantar e copie a URL terminada em /exec.
  *
- * Endpoints (roteamento por ?action= no GET e body.action no POST):
- *   GET  ?action=horarios-disponiveis
- *   GET  ?action=buscar-consulta&nomeCompleto=...&cpf=...
- *   POST { action: "agendar", ... }
- *   POST { action: "cancelar", nomeCompleto, cpf }
- *   POST { action: "reagendar", nomeCompleto, cpf, novaData, novoHorario }
+ * TESTE NO NAVEGADOR:
+ * https://script.google.com/macros/s/SEU_DEPLOY_ID/exec?action=diagnostico
+ * https://script.google.com/macros/s/SEU_DEPLOY_ID/exec?action=horarios-disponiveis
+ *
+ * Resposta padrão do front:
+ * { ok: true, data: ... }
+ * { ok: false, error: "..." }
  */
 
-const SHEET_DISPONIBILIDADE_ID = '1Lgh4XOUnCnd4zC8CUeVcpyAwtGY11x1maTkudUSAF18';
-const SHEET_AGENDAMENTOS_ID    = '186CJBTfrvWJe28beSbn_ek1KN2IF44M_uF1Z77ZRLeE';
+const CONFIG = {
+  SHEET_DISPONIBILIDADE_ID: '1Lgh4XOUnCnd4zC8CUeVcpyAwtGY11x1maTkudUSAF18',
+  SHEET_AGENDAMENTOS_ID: '186CJBTfrvWJe28beSbn_ek1KN2IF44M_uF1Z77ZRLeE',
 
-const ABA_DISPONIBILIDADE = 'Página1'; // ajuste se necessário
-const ABA_AGENDAMENTOS    = 'Página1';
+  // Se sua aba não for Página1, altere aqui exatamente como aparece no rodapé da planilha.
+  ABA_DISPONIBILIDADE: 'Página1',
+  ABA_AGENDAMENTOS: 'Página1',
 
-// ---------- Roteador ----------
+  TIMEZONE: 'America/Sao_Paulo',
+};
+
+const COL_DISPONIBILIDADE = {
+  DATA: 0,
+  DIA: 1,
+  HORARIO: 2,
+  STATUS: 3,
+};
+
+const COL_AGENDAMENTOS = {
+  DATA_CONSULTA: 0,
+  HORARIO: 1,
+  NOME_COMPLETO: 2,
+  CPF: 3,
+  DATA_NASCIMENTO: 4,
+  TELEFONE: 5,
+  EMAIL: 6,
+  CONVENIO: 7,
+  OBSERVACOES: 8,
+  DATA_AGENDAMENTO: 9,
+  STATUS: 10,
+  PROTOCOLO: 11,
+};
+
+const STATUS = {
+  DISPONIVEL: 'Disponível',
+  NAO_AGENDADO: 'Não agendado',
+  AGENDADO: 'Agendado',
+  CONFIRMADO: 'Confirmado',
+  CANCELADO: 'Cancelado',
+  REAGENDADO: 'Reagendado',
+  BLOQUEADO: 'Bloqueado',
+};
+
 function doGet(e) {
-  return handle(e, (e.parameter && e.parameter.action) || '', e.parameter || {});
+  const params = (e && e.parameter) || {};
+  return handleRequest(params.action || '', params);
 }
 
 function doPost(e) {
-  var body = {};
-  try { body = JSON.parse(e.postData.contents || '{}'); } catch (err) {}
-  return handle(e, body.action || '', body);
+  const body = parseBody(e);
+  return handleRequest(body.action || '', body);
 }
 
-function handle(e, action, payload) {
+function handleRequest(action, payload) {
   try {
-    switch (action) {
-      case 'horarios-disponiveis': return json(ok(listarHorariosDisponiveis()));
-      case 'buscar-consulta':      return json(ok(buscarConsulta(payload)));
-      case 'agendar':              return json(ok(agendar(payload)));
-      case 'cancelar':             return json(ok(cancelar(payload)));
-      case 'reagendar':            return json(ok(reagendar(payload)));
-      default: return json(err('Ação inválida: ' + action));
+    switch (String(action || '').trim()) {
+      case 'health':
+        return json(ok({ status: 'online', timestamp: new Date().toISOString() }));
+
+      case 'diagnostico':
+        return json(ok(diagnostico()));
+
+      case 'horarios-disponiveis':
+        return json(ok(listarHorariosDisponiveis()));
+
+      case 'buscar-consulta':
+        return json(ok(buscarConsulta(payload)));
+
+      case 'agendar':
+        return json(ok(agendar(payload)));
+
+      case 'cancelar':
+        return json(ok(cancelar(payload)));
+
+      case 'reagendar':
+        return json(ok(reagendar(payload)));
+
+      default:
+        return json(fail('Ação inválida ou ausente: ' + String(action || '(vazia)')));
     }
-  } catch (ex) {
-    return json(err(ex && ex.message ? ex.message : String(ex)));
+  } catch (error) {
+    console.error(error);
+    return json(fail(error && error.message ? error.message : String(error)));
   }
 }
 
-function ok(data)   { return { ok: true,  data: data }; }
-function err(msg)   { return { ok: false, error: msg }; }
-function json(obj)  {
-  return ContentService.createTextOutput(JSON.stringify(obj))
+function parseBody(e) {
+  if (!e || !e.postData || !e.postData.contents) return {};
+
+  const raw = String(e.postData.contents || '').trim();
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw);
+  } catch (jsonError) {
+    // Fallback para x-www-form-urlencoded, útil em testes manuais.
+    const out = {};
+    raw.split('&').forEach(function (part) {
+      const pieces = part.split('=');
+      if (!pieces[0]) return;
+      out[decodeURIComponent(pieces[0])] = decodeURIComponent((pieces[1] || '').replace(/\+/g, ' '));
+    });
+    return out;
+  }
+}
+
+function ok(data) {
+  return { ok: true, data: data };
+}
+
+function fail(message) {
+  return { ok: false, error: String(message || 'Erro desconhecido') };
+}
+
+function json(payload) {
+  return ContentService
+    .createTextOutput(JSON.stringify(payload))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ---------- Helpers de planilha ----------
-function abaDisp()   { return SpreadsheetApp.openById(SHEET_DISPONIBILIDADE_ID).getSheetByName(ABA_DISPONIBILIDADE); }
-function abaAgend()  { return SpreadsheetApp.openById(SHEET_AGENDAMENTOS_ID).getSheetByName(ABA_AGENDAMENTOS); }
+function abrirAba(spreadsheetId, sheetName, label) {
+  const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = spreadsheet.getSheetByName(sheetName);
 
-function formatDate(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'dd/MM/yyyy');
-  return String(v || '').trim();
-}
-function formatHora(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'HH:mm');
-  return String(v || '').trim();
+  if (!sheet) {
+    const names = spreadsheet.getSheets().map(function (s) { return s.getName(); }).join(', ');
+    throw new Error('Aba "' + sheetName + '" não encontrada em ' + label + '. Abas existentes: ' + names);
+  }
+
+  return sheet;
 }
 
-// ---------- Regras ----------
+function abaDisponibilidade() {
+  return abrirAba(CONFIG.SHEET_DISPONIBILIDADE_ID, CONFIG.ABA_DISPONIBILIDADE, 'Disponibilidade');
+}
+
+function abaAgendamentos() {
+  return abrirAba(CONFIG.SHEET_AGENDAMENTOS_ID, CONFIG.ABA_AGENDAMENTOS, 'Agendamentos');
+}
+
+function normalizarTexto(value) {
+  return String(value || '').trim();
+}
+
+function normalizarChave(value) {
+  return normalizarTexto(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function somenteDigitos(value) {
+  return normalizarTexto(value).replace(/\D/g, '');
+}
+
+function formatarData(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, CONFIG.TIMEZONE, 'dd/MM/yyyy');
+  }
+
+  const text = normalizarTexto(value);
+  if (!text) return '';
+
+  // Se a planilha estiver como yyyy-mm-dd, converte para dd/MM/yyyy.
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return iso[3] + '/' + iso[2] + '/' + iso[1];
+
+  return text;
+}
+
+function formatarHorario(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, CONFIG.TIMEZONE, 'HH:mm');
+  }
+
+  const text = normalizarTexto(value);
+  if (!text) return '';
+
+  const match = text.match(/(\d{1,2})[:hH](\d{2})/);
+  if (match) return ('0' + Number(match[1])).slice(-2) + ':' + match[2];
+
+  return text;
+}
+
+function statusEhDisponivel(status) {
+  const key = normalizarChave(status);
+  // Aceita os dois status usados no projeto/planilha para evitar lista vazia.
+  return key === normalizarChave(STATUS.DISPONIVEL) || key === normalizarChave(STATUS.NAO_AGENDADO);
+}
+
+function getValores(sheet) {
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastRow < 2 || lastColumn < 1) return [];
+  return sheet.getRange(1, 1, lastRow, Math.max(lastColumn, 12)).getValues();
+}
+
+function diagnostico() {
+  const disp = abaDisponibilidade();
+  const agend = abaAgendamentos();
+  const dispValues = getValores(disp);
+  const agendValues = getValores(agend);
+
+  return {
+    api: 'OdontoAgenda GAS',
+    status: 'online',
+    disponibilidade: {
+      planilhaId: CONFIG.SHEET_DISPONIBILIDADE_ID,
+      aba: disp.getName(),
+      linhasComCabecalho: dispValues.length,
+      cabecalho: dispValues[0] || [],
+      primeiraLinhaDados: dispValues[1] || [],
+      horariosDisponiveis: contarDisponiveis(dispValues),
+    },
+    agendamentos: {
+      planilhaId: CONFIG.SHEET_AGENDAMENTOS_ID,
+      aba: agend.getName(),
+      linhasComCabecalho: agendValues.length,
+      cabecalho: agendValues[0] || [],
+    },
+  };
+}
+
+function contarDisponiveis(values) {
+  let total = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (statusEhDisponivel(values[i][COL_DISPONIBILIDADE.STATUS])) total++;
+  }
+  return total;
+}
+
 function listarHorariosDisponiveis() {
-  var sh = abaDisp();
-  var values = sh.getDataRange().getValues();
-  var out = [];
-  // linha 0 = header (Data, Dia, Horário, Status)
-  for (var i = 1; i < values.length; i++) {
-    var row = values[i];
-    var status = String(row[3] || '').trim();
-    if (status !== 'Disponível') continue;
-    out.push({
-      data: formatDate(row[0]),
-      dia: String(row[1] || ''),
-      horario: formatHora(row[2]),
-      status: status
+  const sheet = abaDisponibilidade();
+  const values = getValores(sheet);
+  const horarios = [];
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const data = formatarData(row[COL_DISPONIBILIDADE.DATA]);
+    const horario = formatarHorario(row[COL_DISPONIBILIDADE.HORARIO]);
+    const status = normalizarTexto(row[COL_DISPONIBILIDADE.STATUS]);
+
+    if (!data || !horario || !statusEhDisponivel(status)) continue;
+
+    horarios.push({
+      data: data,
+      dia: normalizarTexto(row[COL_DISPONIBILIDADE.DIA]),
+      horario: horario,
+      status: STATUS.DISPONIVEL,
     });
   }
-  return out;
+
+  return horarios;
 }
 
-function findLinhaDisponibilidade(sh, data, horario) {
-  var values = sh.getDataRange().getValues();
-  for (var i = 1; i < values.length; i++) {
-    if (formatDate(values[i][0]) === data && formatHora(values[i][2]) === horario) {
-      return { row: i + 1, status: String(values[i][3] || '').trim() };
+function encontrarLinhaDisponibilidade(sheet, data, horario) {
+  const values = getValores(sheet);
+  const dataBusca = formatarData(data);
+  const horarioBusca = formatarHorario(horario);
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (
+      formatarData(row[COL_DISPONIBILIDADE.DATA]) === dataBusca &&
+      formatarHorario(row[COL_DISPONIBILIDADE.HORARIO]) === horarioBusca
+    ) {
+      return {
+        rowNumber: i + 1,
+        values: row,
+        status: normalizarTexto(row[COL_DISPONIBILIDADE.STATUS]),
+      };
     }
   }
+
   return null;
 }
 
-function agendar(p) {
-  requireFields(p, ['nomeCompleto','cpf','dataNascimento','telefone','email','convenio','dataConsulta','horario']);
-  var lock = LockService.getScriptLock();
+function agendar(payload) {
+  exigirCampos(payload, ['nomeCompleto', 'cpf', 'dataNascimento', 'telefone', 'email', 'convenio', 'dataConsulta', 'horario']);
+
+  const lock = LockService.getScriptLock();
   lock.waitLock(20000);
+
   try {
-    var sd = abaDisp();
-    var found = findLinhaDisponibilidade(sd, p.dataConsulta, p.horario);
-    if (!found) throw new Error('Horário não encontrado.');
-    if (found.status !== 'Disponível') {
-      throw new Error('Este horário acabou de ser reservado. Escolha outro.');
-    }
-    sd.getRange(found.row, 4).setValue('Agendado');
+    const sheetDisponibilidade = abaDisponibilidade();
+    const slot = encontrarLinhaDisponibilidade(sheetDisponibilidade, payload.dataConsulta, payload.horario);
 
-    var protocolo = 'ODT-' + new Date().getTime().toString(36).toUpperCase();
-    var agora = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+    if (!slot) throw new Error('Horário não encontrado na planilha de disponibilidade.');
+    if (!statusEhDisponivel(slot.status)) throw new Error('Este horário não está mais disponível. Escolha outro.');
 
-    abaAgend().appendRow([
-      p.dataConsulta, p.horario, p.nomeCompleto, p.cpf, p.dataNascimento,
-      p.telefone, p.email, p.convenio, p.observacoes || '', agora, 'Confirmado'
-    ]);
+    const protocolo = gerarProtocolo();
+    const agora = Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'dd/MM/yyyy HH:mm');
 
-    try {
-      if (p.email) {
-        MailApp.sendEmail(p.email, 'Consulta confirmada — OdontoAgenda',
-          'Olá ' + p.nomeCompleto + ',\n\nSua consulta foi confirmada para ' + p.dataConsulta +
-          ' às ' + p.horario + '.\nProtocolo: ' + protocolo + '\n\nObrigado!');
-      }
-    } catch (mailErr) {}
+    sheetDisponibilidade.getRange(slot.rowNumber, COL_DISPONIBILIDADE.STATUS + 1).setValue(STATUS.AGENDADO);
 
-    return {
-      dataConsulta: p.dataConsulta, horario: p.horario, nomeCompleto: p.nomeCompleto,
-      cpf: p.cpf, dataNascimento: p.dataNascimento, telefone: p.telefone, email: p.email,
-      convenio: p.convenio, observacoes: p.observacoes || '', dataAgendamento: agora,
-      status: 'Confirmado', protocolo: protocolo
-    };
+    const row = [];
+    row[COL_AGENDAMENTOS.DATA_CONSULTA] = formatarData(payload.dataConsulta);
+    row[COL_AGENDAMENTOS.HORARIO] = formatarHorario(payload.horario);
+    row[COL_AGENDAMENTOS.NOME_COMPLETO] = normalizarTexto(payload.nomeCompleto);
+    row[COL_AGENDAMENTOS.CPF] = normalizarTexto(payload.cpf);
+    row[COL_AGENDAMENTOS.DATA_NASCIMENTO] = normalizarTexto(payload.dataNascimento);
+    row[COL_AGENDAMENTOS.TELEFONE] = normalizarTexto(payload.telefone);
+    row[COL_AGENDAMENTOS.EMAIL] = normalizarTexto(payload.email);
+    row[COL_AGENDAMENTOS.CONVENIO] = normalizarTexto(payload.convenio);
+    row[COL_AGENDAMENTOS.OBSERVACOES] = normalizarTexto(payload.observacoes);
+    row[COL_AGENDAMENTOS.DATA_AGENDAMENTO] = agora;
+    row[COL_AGENDAMENTOS.STATUS] = STATUS.CONFIRMADO;
+    row[COL_AGENDAMENTOS.PROTOCOLO] = protocolo;
+
+    abaAgendamentos().appendRow(row);
+
+    enviarEmailConfirmacao(payload, protocolo);
+
+    return montarAgendamento({
+      dataConsulta: row[COL_AGENDAMENTOS.DATA_CONSULTA],
+      horario: row[COL_AGENDAMENTOS.HORARIO],
+      nomeCompleto: row[COL_AGENDAMENTOS.NOME_COMPLETO],
+      cpf: row[COL_AGENDAMENTOS.CPF],
+      dataNascimento: row[COL_AGENDAMENTOS.DATA_NASCIMENTO],
+      telefone: row[COL_AGENDAMENTOS.TELEFONE],
+      email: row[COL_AGENDAMENTOS.EMAIL],
+      convenio: row[COL_AGENDAMENTOS.CONVENIO],
+      observacoes: row[COL_AGENDAMENTOS.OBSERVACOES],
+      dataAgendamento: agora,
+      status: STATUS.CONFIRMADO,
+      protocolo: protocolo,
+    });
   } finally {
     lock.releaseLock();
   }
 }
 
-function localizarAgendamento(sh, nome, cpf) {
-  var values = sh.getDataRange().getValues();
-  for (var i = 1; i < values.length; i++) {
-    var st = String(values[i][10] || '').trim();
-    if (String(values[i][2]).trim() === nome.trim() &&
-        String(values[i][3]).trim() === cpf.trim() &&
-        st !== 'Cancelado') {
-      return { row: i + 1, values: values[i] };
+function buscarConsulta(payload) {
+  exigirCampos(payload, ['nomeCompleto', 'cpf']);
+  const encontrado = localizarAgendamento(payload.nomeCompleto, payload.cpf);
+  if (!encontrado) throw new Error('Consulta não encontrada.');
+  return agendamentoDaLinha(encontrado.values);
+}
+
+function cancelar(payload) {
+  exigirCampos(payload, ['nomeCompleto', 'cpf']);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+
+  try {
+    const encontrado = localizarAgendamento(payload.nomeCompleto, payload.cpf);
+    if (!encontrado) throw new Error('Consulta não encontrada.');
+
+    const sheetAgendamentos = abaAgendamentos();
+    sheetAgendamentos.getRange(encontrado.rowNumber, COL_AGENDAMENTOS.STATUS + 1).setValue(STATUS.CANCELADO);
+
+    const sheetDisponibilidade = abaDisponibilidade();
+    const slot = encontrarLinhaDisponibilidade(
+      sheetDisponibilidade,
+      encontrado.values[COL_AGENDAMENTOS.DATA_CONSULTA],
+      encontrado.values[COL_AGENDAMENTOS.HORARIO]
+    );
+    if (slot) {
+      sheetDisponibilidade.getRange(slot.rowNumber, COL_DISPONIBILIDADE.STATUS + 1).setValue(STATUS.DISPONIVEL);
+    }
+
+    return { cancelado: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function reagendar(payload) {
+  exigirCampos(payload, ['nomeCompleto', 'cpf', 'novaData', 'novoHorario']);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+
+  try {
+    const encontrado = localizarAgendamento(payload.nomeCompleto, payload.cpf);
+    if (!encontrado) throw new Error('Consulta não encontrada.');
+
+    const sheetDisponibilidade = abaDisponibilidade();
+    const novoSlot = encontrarLinhaDisponibilidade(sheetDisponibilidade, payload.novaData, payload.novoHorario);
+
+    if (!novoSlot) throw new Error('Novo horário não encontrado na planilha de disponibilidade.');
+    if (!statusEhDisponivel(novoSlot.status)) throw new Error('Novo horário indisponível.');
+
+    const slotAntigo = encontrarLinhaDisponibilidade(
+      sheetDisponibilidade,
+      encontrado.values[COL_AGENDAMENTOS.DATA_CONSULTA],
+      encontrado.values[COL_AGENDAMENTOS.HORARIO]
+    );
+
+    if (slotAntigo) {
+      sheetDisponibilidade.getRange(slotAntigo.rowNumber, COL_DISPONIBILIDADE.STATUS + 1).setValue(STATUS.DISPONIVEL);
+    }
+
+    sheetDisponibilidade.getRange(novoSlot.rowNumber, COL_DISPONIBILIDADE.STATUS + 1).setValue(STATUS.AGENDADO);
+
+    const sheetAgendamentos = abaAgendamentos();
+    sheetAgendamentos.getRange(encontrado.rowNumber, COL_AGENDAMENTOS.DATA_CONSULTA + 1).setValue(formatarData(payload.novaData));
+    sheetAgendamentos.getRange(encontrado.rowNumber, COL_AGENDAMENTOS.HORARIO + 1).setValue(formatarHorario(payload.novoHorario));
+    sheetAgendamentos.getRange(encontrado.rowNumber, COL_AGENDAMENTOS.STATUS + 1).setValue(STATUS.REAGENDADO);
+
+    const atualizado = encontrado.values.slice();
+    atualizado[COL_AGENDAMENTOS.DATA_CONSULTA] = formatarData(payload.novaData);
+    atualizado[COL_AGENDAMENTOS.HORARIO] = formatarHorario(payload.novoHorario);
+    atualizado[COL_AGENDAMENTOS.STATUS] = STATUS.REAGENDADO;
+
+    return agendamentoDaLinha(atualizado);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function localizarAgendamento(nomeCompleto, cpf) {
+  const values = getValores(abaAgendamentos());
+  const nomeBusca = normalizarChave(nomeCompleto);
+  const cpfBusca = somenteDigitos(cpf);
+
+  for (let i = values.length - 1; i >= 1; i--) {
+    const row = values[i];
+    const status = normalizarChave(row[COL_AGENDAMENTOS.STATUS]);
+
+    if (status === normalizarChave(STATUS.CANCELADO)) continue;
+
+    const mesmoNome = normalizarChave(row[COL_AGENDAMENTOS.NOME_COMPLETO]) === nomeBusca;
+    const mesmoCpf = somenteDigitos(row[COL_AGENDAMENTOS.CPF]) === cpfBusca;
+
+    if (mesmoNome && mesmoCpf) {
+      return { rowNumber: i + 1, values: row };
     }
   }
+
   return null;
 }
 
-function cancelar(p) {
-  requireFields(p, ['nomeCompleto','cpf']);
-  var lock = LockService.getScriptLock(); lock.waitLock(20000);
-  try {
-    var sa = abaAgend();
-    var found = localizarAgendamento(sa, p.nomeCompleto, p.cpf);
-    if (!found) throw new Error('Consulta não encontrada.');
-    sa.getRange(found.row, 11).setValue('Cancelado');
-
-    var sd = abaDisp();
-    var slot = findLinhaDisponibilidade(sd, formatDate(found.values[0]), formatHora(found.values[1]));
-    if (slot) sd.getRange(slot.row, 4).setValue('Disponível');
-    return { cancelado: true };
-  } finally { lock.releaseLock(); }
+function agendamentoDaLinha(row) {
+  return montarAgendamento({
+    dataConsulta: formatarData(row[COL_AGENDAMENTOS.DATA_CONSULTA]),
+    horario: formatarHorario(row[COL_AGENDAMENTOS.HORARIO]),
+    nomeCompleto: normalizarTexto(row[COL_AGENDAMENTOS.NOME_COMPLETO]),
+    cpf: normalizarTexto(row[COL_AGENDAMENTOS.CPF]),
+    dataNascimento: formatarData(row[COL_AGENDAMENTOS.DATA_NASCIMENTO]),
+    telefone: normalizarTexto(row[COL_AGENDAMENTOS.TELEFONE]),
+    email: normalizarTexto(row[COL_AGENDAMENTOS.EMAIL]),
+    convenio: normalizarTexto(row[COL_AGENDAMENTOS.CONVENIO]),
+    observacoes: normalizarTexto(row[COL_AGENDAMENTOS.OBSERVACOES]),
+    dataAgendamento: normalizarTexto(row[COL_AGENDAMENTOS.DATA_AGENDAMENTO]),
+    status: normalizarTexto(row[COL_AGENDAMENTOS.STATUS]),
+    protocolo: normalizarTexto(row[COL_AGENDAMENTOS.PROTOCOLO]),
+  });
 }
 
-function reagendar(p) {
-  requireFields(p, ['nomeCompleto','cpf','novaData','novoHorario']);
-  var lock = LockService.getScriptLock(); lock.waitLock(20000);
-  try {
-    var sa = abaAgend();
-    var found = localizarAgendamento(sa, p.nomeCompleto, p.cpf);
-    if (!found) throw new Error('Consulta não encontrada.');
-
-    var sd = abaDisp();
-    var novo = findLinhaDisponibilidade(sd, p.novaData, p.novoHorario);
-    if (!novo || novo.status !== 'Disponível') {
-      throw new Error('Novo horário indisponível.');
-    }
-    // libera antigo
-    var antigo = findLinhaDisponibilidade(sd, formatDate(found.values[0]), formatHora(found.values[1]));
-    if (antigo) sd.getRange(antigo.row, 4).setValue('Disponível');
-    // reserva novo
-    sd.getRange(novo.row, 4).setValue('Agendado');
-    // atualiza linha do agendamento
-    sa.getRange(found.row, 1).setValue(p.novaData);
-    sa.getRange(found.row, 2).setValue(p.novoHorario);
-    sa.getRange(found.row, 11).setValue('Reagendado');
-
-    return {
-      dataConsulta: p.novaData, horario: p.novoHorario,
-      nomeCompleto: p.nomeCompleto, cpf: p.cpf,
-      dataNascimento: String(found.values[4] || ''),
-      telefone: String(found.values[5] || ''),
-      email: String(found.values[6] || ''),
-      convenio: String(found.values[7] || ''),
-      observacoes: String(found.values[8] || ''),
-      status: 'Reagendado'
-    };
-  } finally { lock.releaseLock(); }
-}
-
-function buscarConsulta(p) {
-  requireFields(p, ['nomeCompleto','cpf']);
-  var sa = abaAgend();
-  var found = localizarAgendamento(sa, p.nomeCompleto, p.cpf);
-  if (!found) throw new Error('Consulta não encontrada.');
-  var r = found.values;
+function montarAgendamento(data) {
   return {
-    dataConsulta: formatDate(r[0]), horario: formatHora(r[1]),
-    nomeCompleto: String(r[2]), cpf: String(r[3]),
-    dataNascimento: String(r[4]), telefone: String(r[5]),
-    email: String(r[6]), convenio: String(r[7]),
-    observacoes: String(r[8] || ''), dataAgendamento: String(r[9] || ''),
-    status: String(r[10] || '')
+    dataConsulta: data.dataConsulta || '',
+    horario: data.horario || '',
+    nomeCompleto: data.nomeCompleto || '',
+    cpf: data.cpf || '',
+    dataNascimento: data.dataNascimento || '',
+    telefone: data.telefone || '',
+    email: data.email || '',
+    convenio: data.convenio || '',
+    observacoes: data.observacoes || '',
+    dataAgendamento: data.dataAgendamento || '',
+    status: data.status || '',
+    protocolo: data.protocolo || '',
   };
 }
 
-function requireFields(p, fields) {
-  for (var i = 0; i < fields.length; i++) {
-    if (!p[fields[i]]) throw new Error('Campo obrigatório: ' + fields[i]);
+function exigirCampos(payload, campos) {
+  payload = payload || {};
+  campos.forEach(function (campo) {
+    if (!normalizarTexto(payload[campo])) {
+      throw new Error('Campo obrigatório: ' + campo);
+    }
+  });
+}
+
+function gerarProtocolo() {
+  return 'ODT-' + Utilities.formatDate(new Date(), CONFIG.TIMEZONE, 'yyyyMMddHHmmss') + '-' + Math.floor(Math.random() * 1000);
+}
+
+function enviarEmailConfirmacao(payload, protocolo) {
+  try {
+    const email = normalizarTexto(payload.email);
+    if (!email) return;
+
+    MailApp.sendEmail({
+      to: email,
+      subject: 'Consulta confirmada — OdontoAgenda',
+      body:
+        'Olá ' + normalizarTexto(payload.nomeCompleto) + ',\n\n' +
+        'Sua consulta foi confirmada para ' + formatarData(payload.dataConsulta) +
+        ' às ' + formatarHorario(payload.horario) + '.\n' +
+        'Protocolo: ' + protocolo + '\n\n' +
+        'Obrigado!',
+    });
+  } catch (error) {
+    // Não bloqueia o agendamento se o envio de e-mail falhar.
+    console.warn('Falha ao enviar e-mail de confirmação:', error);
   }
+}
+
+/**
+ * Execute manualmente no Apps Script após colar o código para autorizar e validar.
+ */
+function testeDiagnostico() {
+  Logger.log(JSON.stringify(diagnostico(), null, 2));
 }

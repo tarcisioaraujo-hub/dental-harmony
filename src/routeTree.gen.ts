@@ -13,6 +13,7 @@ import { Route as ConsultaRouteImport } from './routes/consulta'
 import { Route as CancelarRouteImport } from './routes/cancelar'
 import { Route as AgendarRouteImport } from './routes/agendar'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicGasRouteImport } from './routes/api/public/gas'
 
 const ConsultaRoute = ConsultaRouteImport.update({
   id: '/consulta',
@@ -34,18 +35,25 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicGasRoute = ApiPublicGasRouteImport.update({
+  id: '/api/public/gas',
+  path: '/api/public/gas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/agendar': typeof AgendarRoute
   '/cancelar': typeof CancelarRoute
   '/consulta': typeof ConsultaRoute
+  '/api/public/gas': typeof ApiPublicGasRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/agendar': typeof AgendarRoute
   '/cancelar': typeof CancelarRoute
   '/consulta': typeof ConsultaRoute
+  '/api/public/gas': typeof ApiPublicGasRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,20 @@ export interface FileRoutesById {
   '/agendar': typeof AgendarRoute
   '/cancelar': typeof CancelarRoute
   '/consulta': typeof ConsultaRoute
+  '/api/public/gas': typeof ApiPublicGasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/agendar' | '/cancelar' | '/consulta'
+  fullPaths: '/' | '/agendar' | '/cancelar' | '/consulta' | '/api/public/gas'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/agendar' | '/cancelar' | '/consulta'
-  id: '__root__' | '/' | '/agendar' | '/cancelar' | '/consulta'
+  to: '/' | '/agendar' | '/cancelar' | '/consulta' | '/api/public/gas'
+  id:
+    | '__root__'
+    | '/'
+    | '/agendar'
+    | '/cancelar'
+    | '/consulta'
+    | '/api/public/gas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +82,7 @@ export interface RootRouteChildren {
   AgendarRoute: typeof AgendarRoute
   CancelarRoute: typeof CancelarRoute
   ConsultaRoute: typeof ConsultaRoute
+  ApiPublicGasRoute: typeof ApiPublicGasRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +115,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/gas': {
+      id: '/api/public/gas'
+      path: '/api/public/gas'
+      fullPath: '/api/public/gas'
+      preLoaderRoute: typeof ApiPublicGasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +130,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgendarRoute: AgendarRoute,
   CancelarRoute: CancelarRoute,
   ConsultaRoute: ConsultaRoute,
+  ApiPublicGasRoute: ApiPublicGasRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -39,13 +39,18 @@ async function normalize(res: Response) {
   try {
     return jsonResponse(JSON.parse(text), 200);
   } catch {
-    // Não é JSON: quase sempre é a página de login/"Access Denied" do Google.
-    const isAccessDenied = /Access Denied|accounts\.google\.com|Sign in/i.test(text);
+    // Não é JSON: quase sempre é a página de login/permissão do Google.
+    const isAccessDenied =
+      res.status === 401 ||
+      res.status === 403 ||
+      /accounts\.google\.com|ServiceLogin|Access Denied/i.test(text);
     const detail = isAccessDenied
-      ? 'O Web App do Apps Script está com acesso restrito (HTTP ' +
-        res.status +
-        '). Reimplante em "Implantar → Gerenciar implantações → Editar → Quem pode acessar: Qualquer pessoa" e use a nova URL /exec.'
+      ? `O Web App do Apps Script está com acesso restrito (HTTP ${res.status}). ` +
+        'No Apps Script: "Implantar → Gerenciar implantações → Editar (lápis) → ' +
+        'Executar como: Eu | Quem pode acessar: Qualquer pessoa → Implantar", ' +
+        "e use a nova URL /exec."
       : `Resposta inesperada do Apps Script (HTTP ${res.status}): ${text.slice(0, 300)}`;
+
     return jsonResponse({ ok: false, error: detail }, 502);
   }
 }

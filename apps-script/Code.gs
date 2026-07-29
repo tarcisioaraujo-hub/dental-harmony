@@ -324,16 +324,18 @@ function agendar(payload) {
     const row = [];
     row[COL_AGENDAMENTOS.DATA_CONSULTA] = formatarData(payload.dataConsulta);
     row[COL_AGENDAMENTOS.HORARIO] = formatarHorario(payload.horario);
-    row[COL_AGENDAMENTOS.NOME_COMPLETO] = normalizarTexto(payload.nomeCompleto);
-    row[COL_AGENDAMENTOS.CPF] = normalizarTexto(payload.cpf);
-    row[COL_AGENDAMENTOS.DATA_NASCIMENTO] = normalizarTexto(payload.dataNascimento);
-    row[COL_AGENDAMENTOS.TELEFONE] = normalizarTexto(payload.telefone);
-    row[COL_AGENDAMENTOS.EMAIL] = normalizarTexto(payload.email);
-    row[COL_AGENDAMENTOS.CONVENIO] = normalizarTexto(payload.convenio);
-    row[COL_AGENDAMENTOS.OBSERVACOES] = normalizarTexto(payload.observacoes);
+    // REGRA: dados do paciente sempre gravados em MAIÚSCULAS
+    row[COL_AGENDAMENTOS.NOME_COMPLETO] = maiusculas(payload.nomeCompleto);
+    row[COL_AGENDAMENTOS.CPF] = maiusculas(payload.cpf);
+    row[COL_AGENDAMENTOS.DATA_NASCIMENTO] = maiusculas(payload.dataNascimento);
+    row[COL_AGENDAMENTOS.TELEFONE] = maiusculas(payload.telefone);
+    row[COL_AGENDAMENTOS.EMAIL] = maiusculas(payload.email);
+    row[COL_AGENDAMENTOS.CONVENIO] = maiusculas(payload.convenio);
+    row[COL_AGENDAMENTOS.OBSERVACOES] = maiusculas(payload.observacoes);
     row[COL_AGENDAMENTOS.DATA_AGENDAMENTO] = agora;
     row[COL_AGENDAMENTOS.STATUS] = STATUS.CONFIRMADO;
-    row[COL_AGENDAMENTOS.PROTOCOLO] = protocolo;
+    row[COL_AGENDAMENTOS.PROTOCOLO] = maiusculas(protocolo);
+
 
     abaAgendamentos().appendRow(row);
 

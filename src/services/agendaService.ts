@@ -1,15 +1,18 @@
 import type { Agendamento, HorarioDisponivel } from "@/types/agenda";
 import { upperPayload } from "@/lib/format";
 
+// URL do Google Apps Script com Fallback direto para produção
+const API_URL_FALLBACK = "https://script.google.com/macros/s/AKfycbzaUC5bsk1V9-lI1dv3lau1o3chjYiPCQp08FOK9ra7TfMvf94FHBQ2hq-C1R3-HaUf/exec";
+
 // Pega a URL da variável de ambiente com Fallback seguro
 const getApiUrl = () => {
-  const url = import.meta.env.VITE_API_URL || "";
+  const url = import.meta.env.VITE_API_URL || API_URL_FALLBACK;
   return url.trim();
 };
 
 async function postAction<T>(action: string, payload: Record<string, unknown>): Promise<T> {
   const baseUrl = getApiUrl();
-  if (!baseUrl) throw new Error("URL da API não configurada no VITE_API_URL");
+  if (!baseUrl) throw new Error("URL da API não configurada");
 
   const response = await fetch(baseUrl, {
     method: "POST",
@@ -26,7 +29,7 @@ async function postAction<T>(action: string, payload: Record<string, unknown>): 
 
 async function getAction<T>(action: string, params: Record<string, string> = {}): Promise<T> {
   const baseUrl = getApiUrl();
-  if (!baseUrl) throw new Error("URL da API não configurada no VITE_API_URL");
+  if (!baseUrl) throw new Error("URL da API não configurada");
 
   const query = new URLSearchParams({ action, ...upperPayload(params) }).toString();
   const response = await fetch(`${baseUrl}?${query}`, { method: "GET", redirect: "follow" });

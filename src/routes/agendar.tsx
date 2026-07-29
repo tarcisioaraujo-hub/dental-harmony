@@ -82,8 +82,18 @@ function AgendarPage() {
   const mutation = useMutation({
     mutationFn: async (values: FormData) => {
       if (!selected) throw new Error("Selecione um horário");
-      return agendaService.agendar({
+
+      // Converte todas as informações inseridas para MAIÚSCULAS antes do envio
+      const valuesUppercase = {
         ...values,
+        nomeCompleto: values.nomeCompleto.toUpperCase(),
+        email: values.email.toUpperCase(),
+        convenio: values.convenio.toUpperCase(),
+        observacoes: values.observacoes ? values.observacoes.toUpperCase() : "",
+      };
+
+      return agendaService.agendar({
+        ...valuesUppercase,
         dataConsulta: selected.data,
         horario: selected.horario,
       });
@@ -202,7 +212,7 @@ function AgendarPage() {
                   className="mt-6 grid gap-4 md:grid-cols-2"
                 >
                   <Field label="Nome completo *" error={form.formState.errors.nomeCompleto?.message}>
-                    <Input {...form.register("nomeCompleto")} placeholder="Como deseja ser chamado?" />
+                    <Input {...form.register("nomeCompleto")} placeholder="Como deseja ser chamado?" className="uppercase" />
                   </Field>
                   <Field label="CPF *" error={form.formState.errors.cpf?.message}>
                     <Input {...form.register("cpf")} placeholder="000.000.000-00" />
@@ -214,7 +224,7 @@ function AgendarPage() {
                     <Input {...form.register("telefone")} placeholder="(11) 99999-9999" />
                   </Field>
                   <Field label="E-mail *" error={form.formState.errors.email?.message}>
-                    <Input type="email" {...form.register("email")} placeholder="voce@email.com" />
+                    <Input type="email" {...form.register("email")} placeholder="voce@email.com" className="uppercase" />
                   </Field>
                   <Field label="Convênio *" error={form.formState.errors.convenio?.message}>
                     <Select
@@ -223,18 +233,18 @@ function AgendarPage() {
                     >
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Particular">Particular</SelectItem>
-                        <SelectItem value="Unimed">Unimed</SelectItem>
-                        <SelectItem value="Amil">Amil</SelectItem>
-                        <SelectItem value="Bradesco Saúde">Bradesco Saúde</SelectItem>
-                        <SelectItem value="SulAmérica">SulAmérica</SelectItem>
-                        <SelectItem value="Outro">Outro</SelectItem>
+                        <SelectItem value="Particular">PARTICULAR</SelectItem>
+                        <SelectItem value="Unimed">UNIMED</SelectItem>
+                        <SelectItem value="Amil">AMIL</SelectItem>
+                        <SelectItem value="Bradesco Saúde">BRADESCO SAÚDE</SelectItem>
+                        <SelectItem value="SulAmérica">SULAMÉRICA</SelectItem>
+                        <SelectItem value="Outro">OUTRO</SelectItem>
                       </SelectContent>
                     </Select>
                   </Field>
                   <div className="md:col-span-2">
                     <Field label="Observações" error={form.formState.errors.observacoes?.message}>
-                      <Textarea {...form.register("observacoes")} rows={3} placeholder="Opcional" />
+                      <Textarea {...form.register("observacoes")} rows={3} placeholder="Opcional" className="uppercase" />
                     </Field>
                   </div>
                   <div className="flex justify-between md:col-span-2">

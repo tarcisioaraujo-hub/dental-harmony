@@ -14,7 +14,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CalendarDays, CheckCircle2, Clock, Loader2, UserRound } from "lucide-react";
@@ -39,7 +38,7 @@ const schema = z.object({
   dataNascimento: z.string().regex(/^\d{2}\/\d{2}\/\d{4}$/, "Use dd/mm/aaaa"),
   telefone: z.string().trim().min(10, "Telefone inválido").max(20),
   email: z.string().trim().email("E-mail inválido").max(160),
-  convenio: z.string().trim().min(1, "Selecione o convênio"),
+  convenio: z.string().trim().min(2, "Informe o convênio ou Particular"),
   observacoes: z.string().max(500).optional(),
 });
 type FormData = z.infer<typeof schema>;
@@ -83,7 +82,7 @@ function AgendarPage() {
     mutationFn: async (values: FormData) => {
       if (!selected) throw new Error("Selecione um horário");
 
-      // Converte todas as informações inseridas para MAIÚSCULAS antes do envio
+      // Converte todas as informações em formato texto para MAIÚSCULAS
       const valuesUppercase = {
         ...values,
         nomeCompleto: values.nomeCompleto.toUpperCase(),
@@ -227,20 +226,7 @@ function AgendarPage() {
                     <Input type="email" {...form.register("email")} placeholder="voce@email.com" className="uppercase" />
                   </Field>
                   <Field label="Convênio *" error={form.formState.errors.convenio?.message}>
-                    <Select
-                      value={form.watch("convenio")}
-                      onValueChange={(v) => form.setValue("convenio", v, { shouldValidate: true })}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Particular">PARTICULAR</SelectItem>
-                        <SelectItem value="Unimed">UNIMED</SelectItem>
-                        <SelectItem value="Amil">AMIL</SelectItem>
-                        <SelectItem value="Bradesco Saúde">BRADESCO SAÚDE</SelectItem>
-                        <SelectItem value="SulAmérica">SULAMÉRICA</SelectItem>
-                        <SelectItem value="Outro">OUTRO</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input {...form.register("convenio")} placeholder="Ex: Particular, Unimed, Amil..." className="uppercase" />
                   </Field>
                   <div className="md:col-span-2">
                     <Field label="Observações" error={form.formState.errors.observacoes?.message}>

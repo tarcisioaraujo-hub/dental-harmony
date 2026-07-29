@@ -1,23 +1,21 @@
-import { Link, Outlet, useLocation } from "@tanstack/react-router";
+import { Outlet } from "@tanstack/react-router";
 
 const NAV_ITEMS = [
-  { to: "/", label: "Início" },
-  { to: "/agendar", label: "Agendar" },
-  { to: "/consulta", label: "Minhas consultas" },
-  { to: "/cancelar", label: "Cancelar" },
+  { href: "/", label: "Início" },
+  { href: "/agendar", label: "Agendar" },
+  { href: "/consulta", label: "Minhas consultas" },
+  { href: "/cancelar", label: "Cancelar" },
 ];
 
 export function AppShell() {
-  const location = useLocation();
-
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-[#222222] font-sans antialiased flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-[#E8E2D5] bg-[#FDFBF7]/95 backdrop-blur supports-[backdrop-filter]:bg-[#FDFBF7]/80">
+      <header className="sticky top-0 z-50 w-full border-b border-[#E8E2D5] bg-[#FDFBF7]/95 backdrop-blur">
         <div className="container mx-auto px-4 h-20 flex items-center justify-between">
           
-          {/* Logo Estilizada (Substitui a imagem quebrada) */}
-          <Link to="/" className="flex items-center gap-3 group">
+          {/* Logo Estilizada Dourada */}
+          <a href="/" className="flex items-center gap-3 group decoration-none">
             <div className="w-10 h-10 rounded-full bg-[#C5A25D] flex items-center justify-center text-white font-bold text-lg shadow-sm group-hover:scale-105 transition-transform">
               LM
             </div>
@@ -29,26 +27,19 @@ export function AppShell() {
                 Odontologia Especializada
               </span>
             </div>
-          </Link>
+          </a>
 
           {/* Navegação */}
           <nav className="flex items-center gap-1 sm:gap-2">
-            {NAV_ITEMS.map((item) => {
-              const isActive = location.pathname === item.to;
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive
-                      ? "bg-[#C5A25D] text-white shadow-sm"
-                      : "text-[#555555] hover:text-[#222222] hover:bg-[#F3EFE6]"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
+            {NAV_ITEMS.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                className="px-3 py-2 rounded-md text-sm font-medium text-[#555555] hover:text-[#222222] hover:bg-[#F3EFE6] transition-colors"
+              >
+                {item.label}
+              </a>
+            ))}
           </nav>
         </div>
       </header>

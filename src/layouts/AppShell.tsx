@@ -1,7 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Calendar, CalendarPlus, Search, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import logo from "@/assets/logo-lucas.png.asset.json";
 
 const nav = [
   { to: "/", label: "Início", icon: Calendar },
@@ -19,7 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto max-w-6xl px-4 h-16 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
           <Link to="/" className="flex min-w-0 items-center gap-3">
             <img
-              src={logo.url}
+              src="/logo-lucas.png"
               alt="Logotipo Dr. Lucas Monteiro Odontologia Especializada"
               className="h-10 w-auto shrink-0 object-contain"
               width={40}

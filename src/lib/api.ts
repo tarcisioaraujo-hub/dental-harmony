@@ -1,16 +1,4 @@
-import axios, { AxiosError } from "axios";
-
-import { GAS_PROXY_PATH } from "@/lib/gas-config";
-
-/**
- * Todas as chamadas passam pelo proxy interno (/api/public/gas), que repassa
- * para o Web App do Google Apps Script no servidor. Isso elimina CORS,
- * redirects opacos e o erro "Network Error" sem detalhes.
- */
-export const api = axios.create({
-  baseURL: GAS_PROXY_PATH,
-  timeout: 30000,
-});
+import { GAS_API_URL } from "@/lib/gas-config";
 
 export type ApiResponse<T> = {
   ok: boolean;
@@ -19,42 +7,79 @@ export type ApiResponse<T> = {
   message?: string;
 };
 
-function toError(e: unknown): Error {
-  if (e instanceof AxiosError) {
-    const payload = e.response?.data as ApiResponse<unknown> | string | undefined;
-    const msg =
-      (typeof payload === "object" && payload && (payload.error || payload.message)) ||
-      (typeof payload === "string" ? payload.slice(0, 300) : "") ||
-      e.message;
-    // eslint-disable-next-line no-console
-    console.error("[api] falha na requisição:", { status: e.response?.status, data: payload, message: e.message });
-    return new Error(String(msg));
-  }
-  // eslint-disable-next-line no-console
-  console.error("[api] erro inesperado:", e);
-  return e instanceof Error ? e : new Error(String(e));
-}
+// URL direta do Google Apps Script vinda do gas-config.ts
+const getTargetUrl = () => {
+  return GAS_API_URL || "https://script.google.com/macros/s/AKfycbzaUC5bsk1V9-lI1dv3lau1o3chjYiPCQp08FOK9ra7TfMvf94FHBQ2hq-C1R3-HaUf/exec";
+};
 
-export async function apiGet<T>(action: string, params: Record<string, string> = {}) {
+export async function apiGet<T>(action: string, params: Record<string, string> = {}): Promise<T> {
   try {
-    const { data } = await api.get<ApiResponse<T>>("", { params: { action, ...params } });
-    if (!data || typeof data !== "object") throw new Error("Resposta inválida da API.");
-    if (!data.ok) throw new Error(data.error || "Erro na requisição");
-    return data.data as T;
-  } catch (e) {
-    throw toError(e);
-  }
-}
+    const baseUrl = getTargetUrl();
+    const query = new URLSearchParams({ action, ...params }).toString();
+    const url = `${baseUrl}?${query}`;
 
-export async function apiPost<T>(action: string, body: Record<string, unknown>) {
-  try {
-    const { data } = await api.post<ApiResponse<T>>("", JSON.stringify({ action, ...body }), {
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
     });
-    if (!data || typeof data !== "object") throw new Error("Resposta inválida da API.");
-    if (!data.ok) throw new Error(data.error || "Erro na requisição");
-    return data.data as T;
+
+    if (!response.ok) {
+      throw new Error(`Erro de rede: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (Array.isArray(data)) {
+      return data as unknown as T;
+    }
+
+    if (data && typeof data === "object") {
+      if (data.ok === false) {
+        throw new Error(data.error || data.message || "Erro retornado pela API");
+      }
+      if ("data" in data) {
+        return data.data as T;
+      }
+    }
+
+    return data as T;
   } catch (e) {
-    throw toError(e);
+    console.error("[apiGet] Falha na requisição:", e);
+    throw e instanceof Error ? e : new Error(String(e));
+  }
+}
+
+export async function apiPost<T>(action: string, body: Record<string, unknown>): Promise<T> {
+  try {
+    const baseUrl = getTargetUrl();
+
+    const response = await fetch(baseUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({ action, ...body }),
+      redirect: "follow",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Erro de rede: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data && typeof data === "object") {
+      if (data.ok === false) {
+        throw new Error(data.error || data.message || "Erro retornado pela API");
+      }
+      if ("data" in data) {
+        return data.data as T;
+      }
+    }
+
+    return data as T;
+  } catch (e) {
+    console.error("[apiPost] Falha na requisição:", e);
+    throw e instanceof Error ? e : new Error(String(e));
   }
 }

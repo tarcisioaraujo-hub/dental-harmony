@@ -493,6 +493,34 @@ function localizarAgendamento(nomeCompleto, cpf) {
   return null;
 }
 
+/** Converte qualquer valor para texto em MAIÚSCULAS (regra de gravação). */
+function maiusculas(value) {
+  return normalizarTexto(value).toUpperCase();
+}
+
+/** Lista TODAS as consultas ativas do paciente. CPF é opcional. */
+function localizarAgendamentos(nomeCompleto, cpf) {
+  const values = getValores(abaAgendamentos());
+  const nomeBusca = normalizarChave(nomeCompleto);
+  const cpfBusca = somenteDigitos(cpf);
+  const encontrados = [];
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const status = normalizarChave(row[COL_AGENDAMENTOS.STATUS]);
+    if (status === normalizarChave(STATUS.CANCELADO)) continue;
+
+    if (normalizarChave(row[COL_AGENDAMENTOS.NOME_COMPLETO]) !== nomeBusca) continue;
+    if (cpfBusca && somenteDigitos(row[COL_AGENDAMENTOS.CPF]) !== cpfBusca) continue;
+
+    encontrados.push({ rowNumber: i + 1, values: row });
+  }
+
+  return encontrados;
+}
+
+
+
 function agendamentoDaLinha(row) {
   return montarAgendamento({
     dataConsulta: formatarData(row[COL_AGENDAMENTOS.DATA_CONSULTA]),

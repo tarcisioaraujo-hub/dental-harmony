@@ -82,17 +82,8 @@ function AgendarPage() {
     mutationFn: async (values: FormData) => {
       if (!selected) throw new Error("Selecione um horário");
 
-      // Converte todas as informações em formato texto para MAIÚSCULAS
-      const valuesUppercase = {
-        ...values,
-        nomeCompleto: values.nomeCompleto.toUpperCase(),
-        email: values.email.toUpperCase(),
-        convenio: values.convenio.toUpperCase(),
-        observacoes: values.observacoes ? values.observacoes.toUpperCase() : "",
-      };
-
       return agendaService.agendar({
-        ...valuesUppercase,
+        ...values,
         dataConsulta: selected.data,
         horario: selected.horario,
       });
@@ -211,7 +202,7 @@ function AgendarPage() {
                   className="mt-6 grid gap-4 md:grid-cols-2"
                 >
                   <Field label="Nome completo *" error={form.formState.errors.nomeCompleto?.message}>
-                    <Input {...form.register("nomeCompleto")} placeholder="Como deseja ser chamado?" className="uppercase" />
+                    <Input {...form.register("nomeCompleto")} placeholder="Como deseja ser chamado?" />
                   </Field>
                   <Field label="CPF *" error={form.formState.errors.cpf?.message}>
                     <Input {...form.register("cpf")} placeholder="000.000.000-00" />
@@ -223,14 +214,14 @@ function AgendarPage() {
                     <Input {...form.register("telefone")} placeholder="(11) 99999-9999" />
                   </Field>
                   <Field label="E-mail *" error={form.formState.errors.email?.message}>
-                    <Input type="email" {...form.register("email")} placeholder="voce@email.com" className="uppercase" />
+                    <Input type="email" {...form.register("email")} placeholder="voce@email.com" />
                   </Field>
                   <Field label="Convênio *" error={form.formState.errors.convenio?.message}>
-                    <Input {...form.register("convenio")} placeholder="Ex: Particular, Unimed, Amil..." className="uppercase" />
+                    <Input {...form.register("convenio")} placeholder="Ex: Particular, Unimed, Amil..." />
                   </Field>
                   <div className="md:col-span-2">
                     <Field label="Observações" error={form.formState.errors.observacoes?.message}>
-                      <Textarea {...form.register("observacoes")} rows={3} placeholder="Opcional" className="uppercase" />
+                      <Textarea {...form.register("observacoes")} rows={3} placeholder="Opcional" />
                     </Field>
                   </div>
                   <div className="flex justify-between md:col-span-2">

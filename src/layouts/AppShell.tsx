@@ -18,7 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto max-w-6xl px-4 h-16 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
           <Link to="/" className="flex min-w-0 items-center gap-3">
             <img
-              src="/logo-lucas.png"
+              src="/logo_lucas.png"
               alt="Logotipo Dr. Lucas Monteiro Odontologia Especializada"
               className="h-10 w-auto shrink-0 object-contain"
               width={40}

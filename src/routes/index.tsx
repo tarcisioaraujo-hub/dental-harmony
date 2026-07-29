@@ -29,9 +29,6 @@ function Home() {
           <h1 className="mt-4 text-4xl font-semibold text-primary md:text-6xl">
             Agende sua consulta
           </h1>
-          <p className="mx-auto mt-4 max-w-lg text-hero-foreground/70">
-            Escolha a data, o horário e receba a confirmação na hora. Sem telefonemas, sem espera.
-          </p>
         </div>
       </section>
 

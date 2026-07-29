@@ -367,6 +367,14 @@ function buscarConsulta(payload) {
   return agendamentoDaLinha(encontrado.values);
 }
 
+/** Retorna TODAS as consultas ativas do paciente (CPF é opcional). */
+function buscarConsultas(payload) {
+  exigirCampos(payload, ['nomeCompleto']);
+  return localizarAgendamentos(payload.nomeCompleto, payload.cpf).map(function (item) {
+    return agendamentoDaLinha(item.values);
+  });
+}
+
 function cancelar(payload) {
   exigirCampos(payload, ['nomeCompleto', 'cpf']);
 
@@ -374,8 +382,31 @@ function cancelar(payload) {
   lock.waitLock(20000);
 
   try {
-    const encontrado = localizarAgendamento(payload.nomeCompleto, payload.cpf);
+    const candidatos = localizarAgendamentos(payload.nomeCompleto, payload.cpf);
+    if (!candidatos.length) throw new Error('Consulta não encontrada.');
+
+    const protocoloAlvo = normalizarChave(payload.protocolo);
+    const dataAlvo = payload.dataConsulta ? formatarData(payload.dataConsulta) : '';
+    const horaAlvo = payload.horario ? formatarHorario(payload.horario) : '';
+
+    let encontrado = null;
+    for (let i = 0; i < candidatos.length; i++) {
+      const row = candidatos[i].values;
+      if (protocoloAlvo) {
+        if (normalizarChave(row[COL_AGENDAMENTOS.PROTOCOLO]) === protocoloAlvo) { encontrado = candidatos[i]; break; }
+        continue;
+      }
+      if (dataAlvo && horaAlvo) {
+        if (formatarData(row[COL_AGENDAMENTOS.DATA_CONSULTA]) === dataAlvo &&
+            formatarHorario(row[COL_AGENDAMENTOS.HORARIO]) === horaAlvo) { encontrado = candidatos[i]; break; }
+        continue;
+      }
+      encontrado = candidatos[i];
+      break;
+    }
+
     if (!encontrado) throw new Error('Consulta não encontrada.');
+
 
     const sheetAgendamentos = abaAgendamentos();
     sheetAgendamentos.getRange(encontrado.rowNumber, COL_AGENDAMENTOS.STATUS + 1).setValue(STATUS.CANCELADO);

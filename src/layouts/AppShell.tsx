@@ -1,11 +1,12 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Calendar, CalendarPlus, Search, XCircle, Stethoscope } from "lucide-react";
+import { Calendar, CalendarPlus, Search, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import logo from "@/assets/logo-lucas.png.asset.json";
 
 const nav = [
   { to: "/", label: "Início", icon: Calendar },
   { to: "/agendar", label: "Agendar", icon: CalendarPlus },
-  { to: "/consulta", label: "Minha consulta", icon: Search },
+  { to: "/consulta", label: "Minhas consultas", icon: Search },
   { to: "/cancelar", label: "Cancelar", icon: XCircle },
 ];
 
@@ -14,15 +15,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <header className="sticky top-0 z-40 border-b bg-card/80 backdrop-blur">
-        <div className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl bg-primary text-primary-foreground grid place-items-center">
-              <Stethoscope className="h-5 w-5" />
-            </div>
-            <div className="leading-tight">
-              <div className="font-semibold text-foreground">OdontoAgenda</div>
-              <div className="text-xs text-muted-foreground">Agendamento online</div>
+      <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur">
+        <div className="mx-auto max-w-6xl px-4 h-16 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+          <Link to="/" className="flex min-w-0 items-center gap-3">
+            <img
+              src={logo.url}
+              alt="Logotipo Dr. Lucas Monteiro Odontologia Especializada"
+              className="h-10 w-auto shrink-0 object-contain"
+              width={40}
+              height={40}
+            />
+            <div className="min-w-0 leading-tight">
+              <div className="truncate font-semibold text-foreground">Dr. Lucas Monteiro</div>
+              <div className="truncate text-[10px] tracking-[0.18em] uppercase text-muted-foreground">
+                Odontologia Especializada
+              </div>
             </div>
           </Link>
           <nav className="hidden md:flex items-center gap-1">
@@ -35,7 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   className={cn(
                     "px-3 py-2 rounded-md text-sm font-medium transition-colors",
                     active
-                      ? "bg-secondary text-secondary-foreground"
+                      ? "bg-primary/15 text-foreground"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted",
                   )}
                 >
@@ -49,7 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <main className="flex-1">{children}</main>
 
-      <nav className="md:hidden sticky bottom-0 border-t bg-card">
+      <nav className="md:hidden sticky bottom-0 z-40 border-t bg-card">
         <div className="grid grid-cols-4">
           {nav.map((n) => {
             const active = pathname === n.to;
@@ -59,7 +66,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={n.to}
                 to={n.to}
                 className={cn(
-                  "flex flex-col items-center gap-1 py-2 text-xs",
+                  "flex flex-col items-center gap-1 py-2 text-[11px]",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >
@@ -71,9 +78,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      <footer className="hidden md:block border-t py-6 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} OdontoAgenda — Sistema de agendamento
+      <footer className="hidden md:block border-t bg-hero py-6 text-center text-xs text-hero-foreground/70">
+        © {new Date().getFullYear()} Dr. Lucas Monteiro — Odontologia Especializada
       </footer>
+    </div>
+  );
+}
+
+/** Faixa escura de topo com título dourado, igual ao modelo de referência. */
+export function HeroBanner({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="bg-hero">
+      <div className="mx-auto max-w-4xl px-4 pt-12 pb-24 text-center">
+        <h1 className="text-3xl md:text-5xl font-semibold text-primary">{title}</h1>
+        {subtitle && <p className="mt-3 text-sm md:text-base text-hero-foreground/70">{subtitle}</p>}
+      </div>
     </div>
   );
 }

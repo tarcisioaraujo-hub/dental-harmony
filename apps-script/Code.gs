@@ -89,6 +89,10 @@ function handleRequest(action, payload) {
       case 'buscar-consulta':
         return json(ok(buscarConsulta(payload)));
 
+      case 'buscar-consultas':
+        return json(ok(buscarConsultas(payload)));
+
+
       case 'agendar':
         return json(ok(agendar(payload)));
 
@@ -320,16 +324,18 @@ function agendar(payload) {
     const row = [];
     row[COL_AGENDAMENTOS.DATA_CONSULTA] = formatarData(payload.dataConsulta);
     row[COL_AGENDAMENTOS.HORARIO] = formatarHorario(payload.horario);
-    row[COL_AGENDAMENTOS.NOME_COMPLETO] = normalizarTexto(payload.nomeCompleto);
-    row[COL_AGENDAMENTOS.CPF] = normalizarTexto(payload.cpf);
-    row[COL_AGENDAMENTOS.DATA_NASCIMENTO] = normalizarTexto(payload.dataNascimento);
-    row[COL_AGENDAMENTOS.TELEFONE] = normalizarTexto(payload.telefone);
-    row[COL_AGENDAMENTOS.EMAIL] = normalizarTexto(payload.email);
-    row[COL_AGENDAMENTOS.CONVENIO] = normalizarTexto(payload.convenio);
-    row[COL_AGENDAMENTOS.OBSERVACOES] = normalizarTexto(payload.observacoes);
+    // REGRA: dados do paciente sempre gravados em MAIÚSCULAS
+    row[COL_AGENDAMENTOS.NOME_COMPLETO] = maiusculas(payload.nomeCompleto);
+    row[COL_AGENDAMENTOS.CPF] = maiusculas(payload.cpf);
+    row[COL_AGENDAMENTOS.DATA_NASCIMENTO] = maiusculas(payload.dataNascimento);
+    row[COL_AGENDAMENTOS.TELEFONE] = maiusculas(payload.telefone);
+    row[COL_AGENDAMENTOS.EMAIL] = maiusculas(payload.email);
+    row[COL_AGENDAMENTOS.CONVENIO] = maiusculas(payload.convenio);
+    row[COL_AGENDAMENTOS.OBSERVACOES] = maiusculas(payload.observacoes);
     row[COL_AGENDAMENTOS.DATA_AGENDAMENTO] = agora;
     row[COL_AGENDAMENTOS.STATUS] = STATUS.CONFIRMADO;
-    row[COL_AGENDAMENTOS.PROTOCOLO] = protocolo;
+    row[COL_AGENDAMENTOS.PROTOCOLO] = maiusculas(protocolo);
+
 
     abaAgendamentos().appendRow(row);
 
@@ -361,6 +367,14 @@ function buscarConsulta(payload) {
   return agendamentoDaLinha(encontrado.values);
 }
 
+/** Retorna TODAS as consultas ativas do paciente (CPF é opcional). */
+function buscarConsultas(payload) {
+  exigirCampos(payload, ['nomeCompleto']);
+  return localizarAgendamentos(payload.nomeCompleto, payload.cpf).map(function (item) {
+    return agendamentoDaLinha(item.values);
+  });
+}
+
 function cancelar(payload) {
   exigirCampos(payload, ['nomeCompleto', 'cpf']);
 
@@ -368,8 +382,31 @@ function cancelar(payload) {
   lock.waitLock(20000);
 
   try {
-    const encontrado = localizarAgendamento(payload.nomeCompleto, payload.cpf);
+    const candidatos = localizarAgendamentos(payload.nomeCompleto, payload.cpf);
+    if (!candidatos.length) throw new Error('Consulta não encontrada.');
+
+    const protocoloAlvo = normalizarChave(payload.protocolo);
+    const dataAlvo = payload.dataConsulta ? formatarData(payload.dataConsulta) : '';
+    const horaAlvo = payload.horario ? formatarHorario(payload.horario) : '';
+
+    let encontrado = null;
+    for (let i = 0; i < candidatos.length; i++) {
+      const row = candidatos[i].values;
+      if (protocoloAlvo) {
+        if (normalizarChave(row[COL_AGENDAMENTOS.PROTOCOLO]) === protocoloAlvo) { encontrado = candidatos[i]; break; }
+        continue;
+      }
+      if (dataAlvo && horaAlvo) {
+        if (formatarData(row[COL_AGENDAMENTOS.DATA_CONSULTA]) === dataAlvo &&
+            formatarHorario(row[COL_AGENDAMENTOS.HORARIO]) === horaAlvo) { encontrado = candidatos[i]; break; }
+        continue;
+      }
+      encontrado = candidatos[i];
+      break;
+    }
+
     if (!encontrado) throw new Error('Consulta não encontrada.');
+
 
     const sheetAgendamentos = abaAgendamentos();
     sheetAgendamentos.getRange(encontrado.rowNumber, COL_AGENDAMENTOS.STATUS + 1).setValue(STATUS.CANCELADO);
@@ -455,6 +492,34 @@ function localizarAgendamento(nomeCompleto, cpf) {
 
   return null;
 }
+
+/** Converte qualquer valor para texto em MAIÚSCULAS (regra de gravação). */
+function maiusculas(value) {
+  return normalizarTexto(value).toUpperCase();
+}
+
+/** Lista TODAS as consultas ativas do paciente. CPF é opcional. */
+function localizarAgendamentos(nomeCompleto, cpf) {
+  const values = getValores(abaAgendamentos());
+  const nomeBusca = normalizarChave(nomeCompleto);
+  const cpfBusca = somenteDigitos(cpf);
+  const encontrados = [];
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const status = normalizarChave(row[COL_AGENDAMENTOS.STATUS]);
+    if (status === normalizarChave(STATUS.CANCELADO)) continue;
+
+    if (normalizarChave(row[COL_AGENDAMENTOS.NOME_COMPLETO]) !== nomeBusca) continue;
+    if (cpfBusca && somenteDigitos(row[COL_AGENDAMENTOS.CPF]) !== cpfBusca) continue;
+
+    encontrados.push({ rowNumber: i + 1, values: row });
+  }
+
+  return encontrados;
+}
+
+
 
 function agendamentoDaLinha(row) {
   return montarAgendamento({

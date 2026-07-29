@@ -6,25 +6,28 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 
-import { AppShell } from "@/layouts/AppShell";
+import { AppShell, HeroBanner } from "@/layouts/AppShell";
 import { agendaService } from "@/services/agendaService";
+import { formatarDataBR } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock, Loader2, UserRound } from "lucide-react";
 
 export const Route = createFileRoute("/agendar")({
   head: () => ({
     meta: [
-      { title: "Agendar consulta — OdontoAgenda" },
-      { name: "description", content: "Escolha data, horário e confirme sua consulta odontológica online." },
-      { property: "og:title", content: "Agendar consulta — OdontoAgenda" },
-      { property: "og:description", content: "Escolha data, horário e confirme sua consulta odontológica online." },
+      { title: "Agendar consulta — Dr. Lucas Monteiro" },
+      { name: "description", content: "Escolha a data, o horário e confirme sua consulta odontológica online." },
+      { property: "og:title", content: "Agendar consulta — Dr. Lucas Monteiro" },
+      { property: "og:description", content: "Escolha a data, o horário e confirme sua consulta odontológica online." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: AgendarPage,
@@ -41,20 +44,10 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-// Helper para formatar a data ISO "YYYY-MM-DD" para "DD/MM/YYYY" na exibição
-function formatarDataBR(dataIso: string) {
-  if (!dataIso) return "";
-  if (dataIso.includes("/")) return dataIso;
-  const parts = dataIso.split("-");
-  if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  }
-  return dataIso;
-}
-
 function AgendarPage() {
   const qc = useQueryClient();
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [dataSelecionada, setDataSelecionada] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ data: string; horario: string } | null>(null);
   const [protocolo, setProtocolo] = useState<string | null>(null);
 
@@ -63,24 +56,23 @@ function AgendarPage() {
     queryFn: agendaService.listarHorariosDisponiveis,
   });
 
-  // Agrupa os horários por data tratando diferenças de case ("DISPONÍVEL", "Disponível", "disponivel")
   const grouped = useMemo(() => {
     const map = new Map<string, { dia: string; horarios: string[] }>();
-    
     for (const h of horarios) {
       const statusClean = String(h.status || "").trim().toLowerCase();
-      // Aceita variações de escrita
       if (!statusClean.includes("dispon") && statusClean !== "livre") continue;
-
       const cur = map.get(h.data) ?? { dia: h.dia, horarios: [] };
-      if (!cur.horarios.includes(h.horario)) {
-        cur.horarios.push(h.horario);
-      }
+      if (!cur.horarios.includes(h.horario)) cur.horarios.push(h.horario);
       map.set(h.data, cur);
     }
-    
-    return Array.from(map.entries()).map(([data, v]) => ({ data, ...v }));
+    return Array.from(map.entries()).map(([data, v]) => ({
+      data,
+      ...v,
+      horarios: [...v.horarios].sort(),
+    }));
   }, [horarios]);
+
+  const diaAtual = grouped.find((g) => g.data === dataSelecionada);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -107,61 +99,77 @@ function AgendarPage() {
 
   return (
     <AppShell>
-      <section className="mx-auto max-w-4xl px-4 py-10">
-        <header className="mb-6">
-          <h1 className="text-3xl font-bold">Agendar consulta</h1>
-          <p className="text-muted-foreground">Siga os 3 passos abaixo.</p>
-        </header>
+      <HeroBanner title="Agende sua consulta" />
 
-        <Stepper step={step} />
+      <section className="mx-auto -mt-16 max-w-3xl px-4 pb-16">
+        <Card className="rounded-3xl shadow-xl">
+          <CardContent className="p-6 md:p-10">
+            <Stepper step={step} />
 
-        {step === 1 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>1. Escolha um horário</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading && (
-                <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Carregando horários...
+            {step === 1 && (
+              <div className="mt-8">
+                <SectionTitle icon={CalendarDays} title="Escolha a data" />
+
+                {isLoading && (
+                  <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Carregando datas...
+                  </div>
+                )}
+                {isError && (
+                  <div className="py-10 text-center">
+                    <p className="text-destructive">Não foi possível carregar as datas.</p>
+                    <Button variant="outline" className="mt-3" onClick={() => refetch()}>
+                      Tentar novamente
+                    </Button>
+                  </div>
+                )}
+                {!isLoading && !isError && grouped.length === 0 && (
+                  <p className="py-10 text-center text-muted-foreground">Nenhuma data disponível no momento.</p>
+                )}
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {grouped.map((g) => {
+                    const active = dataSelecionada === g.data;
+                    return (
+                      <button
+                        key={g.data}
+                        type="button"
+                        onClick={() => {
+                          setDataSelecionada(g.data);
+                          setSelected(null);
+                        }}
+                        className={cn(
+                          "rounded-2xl border p-4 text-left transition-colors",
+                          active ? "border-primary bg-primary/10" : "bg-muted/40 hover:bg-muted",
+                        )}
+                      >
+                        <div className="font-semibold">{formatarDataBR(g.data)}</div>
+                        <div className="text-sm capitalize text-muted-foreground">{g.dia}</div>
+                        <Badge variant="secondary" className="mt-2">
+                          {g.horarios.length} horários
+                        </Badge>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-              {isError && (
-                <div className="text-center py-8">
-                  <p className="text-destructive">Não foi possível carregar os horários.</p>
-                  <Button variant="outline" className="mt-3" onClick={() => refetch()}>
-                    Tentar novamente
-                  </Button>
-                </div>
-              )}
-              {!isLoading && !isError && grouped.length === 0 && (
-                <p className="text-center py-8 text-muted-foreground">
-                  Nenhum horário disponível no momento.
-                </p>
-              )}
-              <div className="space-y-4">
-                {grouped.map((g) => (
-                  <div key={g.data} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="font-semibold text-lg">{formatarDataBR(g.data)}</div>
-                        <div className="text-sm text-muted-foreground capitalize">{g.dia}</div>
-                      </div>
-                      <Badge variant="secondary">{g.horarios.length} disponíveis</Badge>
-                    </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                      {g.horarios.map((h) => {
-                        const isSel = selected?.data === g.data && selected.horario === h;
+
+                {/* Horários aparecem apenas depois da data escolhida */}
+                {diaAtual && (
+                  <div className="mt-8">
+                    <SectionTitle icon={Clock} title="Horários disponíveis" />
+                    <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                      {diaAtual.horarios.map((h) => {
+                        const isSel = selected?.data === diaAtual.data && selected.horario === h;
                         return (
                           <button
                             key={h}
                             type="button"
-                            onClick={() => setSelected({ data: g.data, horario: h })}
+                            onClick={() => setSelected({ data: diaAtual.data, horario: h })}
                             className={cn(
-                              "px-3 py-2 rounded-md border text-sm font-medium transition-colors",
+                              "rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
                               isSel
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-card hover:bg-secondary"
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "bg-muted/40 hover:bg-muted",
                             )}
                           >
                             {h}
@@ -170,125 +178,127 @@ function AgendarPage() {
                       })}
                     </div>
                   </div>
-                ))}
-              </div>
-              <div className="mt-6 flex justify-end">
-                <Button disabled={!selected} onClick={() => setStep(2)}>
-                  Continuar
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                )}
 
-        {step === 2 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>2. Seus dados</CardTitle>
-              {selected && (
-                <p className="text-sm text-muted-foreground">
-                  {formatarDataBR(selected.data)} às {selected.horario}
-                </p>
-              )}
-            </CardHeader>
-            <CardContent>
-              <form
-                onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
-                className="grid md:grid-cols-2 gap-4"
-              >
-                <Field label="Nome completo" error={form.formState.errors.nomeCompleto?.message}>
-                  <Input {...form.register("nomeCompleto")} placeholder="Como está no documento" />
-                </Field>
-                <Field label="CPF" error={form.formState.errors.cpf?.message}>
-                  <Input {...form.register("cpf")} placeholder="000.000.000-00" />
-                </Field>
-                <Field label="Data de nascimento" error={form.formState.errors.dataNascimento?.message}>
-                  <Input {...form.register("dataNascimento")} placeholder="dd/mm/aaaa" />
-                </Field>
-                <Field label="Telefone" error={form.formState.errors.telefone?.message}>
-                  <Input {...form.register("telefone")} placeholder="(11) 99999-9999" />
-                </Field>
-                <Field label="E-mail" error={form.formState.errors.email?.message}>
-                  <Input type="email" {...form.register("email")} placeholder="voce@email.com" />
-                </Field>
-                <Field label="Convênio" error={form.formState.errors.convenio?.message}>
-                  <Select
-                    value={form.watch("convenio")}
-                    onValueChange={(v) => form.setValue("convenio", v, { shouldValidate: true })}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Particular">Particular</SelectItem>
-                      <SelectItem value="Unimed">Unimed</SelectItem>
-                      <SelectItem value="Amil">Amil</SelectItem>
-                      <SelectItem value="Bradesco Saúde">Bradesco Saúde</SelectItem>
-                      <SelectItem value="SulAmérica">SulAmérica</SelectItem>
-                      <SelectItem value="Outro">Outro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <div className="md:col-span-2">
-                  <Field label="Observações" error={form.formState.errors.observacoes?.message}>
-                    <Textarea {...form.register("observacoes")} rows={3} placeholder="Opcional" />
-                  </Field>
-                </div>
-                <div className="md:col-span-2 flex justify-between">
-                  <Button type="button" variant="outline" onClick={() => setStep(1)}>Voltar</Button>
-                  <Button type="submit" disabled={mutation.isPending}>
-                    {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Confirmar agendamento
+                <div className="mt-8 flex justify-end">
+                  <Button disabled={!selected} onClick={() => setStep(2)}>
+                    Continuar
                   </Button>
                 </div>
-              </form>
-            </CardContent>
-          </Card>
-        )}
+              </div>
+            )}
 
-        {step === 3 && (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 text-primary grid place-items-center">
-                <CheckCircle2 className="h-8 w-8" />
-              </div>
-              <h2 className="mt-4 text-2xl font-bold">Consulta confirmada!</h2>
-              <p className="mt-2 text-muted-foreground">
-                {selected && <>Sua consulta é em <strong>{formatarDataBR(selected.data)}</strong> às <strong>{selected.horario}</strong>.</>}
-              </p>
-              <div className="mt-4 inline-block rounded-lg bg-secondary px-4 py-2 text-sm">
-                Protocolo: <strong>{protocolo}</strong>
-              </div>
+            {step === 2 && (
               <div className="mt-8">
-                <Button
-                  onClick={() => {
-                    setStep(1);
-                    setSelected(null);
-                    setProtocolo(null);
-                    form.reset();
-                  }}
+                <SectionTitle icon={UserRound} title="Identificação do Paciente" />
+                {selected && (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {formatarDataBR(selected.data)} às {selected.horario}
+                  </p>
+                )}
+
+                <form
+                  onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
+                  className="mt-6 grid gap-4 md:grid-cols-2"
                 >
-                  Fazer novo agendamento
-                </Button>
+                  <Field label="Nome completo *" error={form.formState.errors.nomeCompleto?.message}>
+                    <Input {...form.register("nomeCompleto")} placeholder="Como deseja ser chamado?" />
+                  </Field>
+                  <Field label="CPF *" error={form.formState.errors.cpf?.message}>
+                    <Input {...form.register("cpf")} placeholder="000.000.000-00" />
+                  </Field>
+                  <Field label="Nascimento *" error={form.formState.errors.dataNascimento?.message}>
+                    <Input {...form.register("dataNascimento")} placeholder="dd/mm/aaaa" />
+                  </Field>
+                  <Field label="Telefone *" error={form.formState.errors.telefone?.message}>
+                    <Input {...form.register("telefone")} placeholder="(11) 99999-9999" />
+                  </Field>
+                  <Field label="E-mail *" error={form.formState.errors.email?.message}>
+                    <Input type="email" {...form.register("email")} placeholder="voce@email.com" />
+                  </Field>
+                  <Field label="Convênio *" error={form.formState.errors.convenio?.message}>
+                    <Select
+                      value={form.watch("convenio")}
+                      onValueChange={(v) => form.setValue("convenio", v, { shouldValidate: true })}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Particular">Particular</SelectItem>
+                        <SelectItem value="Unimed">Unimed</SelectItem>
+                        <SelectItem value="Amil">Amil</SelectItem>
+                        <SelectItem value="Bradesco Saúde">Bradesco Saúde</SelectItem>
+                        <SelectItem value="SulAmérica">SulAmérica</SelectItem>
+                        <SelectItem value="Outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <div className="md:col-span-2">
+                    <Field label="Observações" error={form.formState.errors.observacoes?.message}>
+                      <Textarea {...form.register("observacoes")} rows={3} placeholder="Opcional" />
+                    </Field>
+                  </div>
+                  <div className="flex justify-between md:col-span-2">
+                    <Button type="button" variant="outline" onClick={() => setStep(1)}>Voltar</Button>
+                    <Button type="submit" disabled={mutation.isPending}>
+                      {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Confirmar agendamento
+                    </Button>
+                  </div>
+                </form>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
+
+            {step === 3 && (
+              <div className="py-10 text-center">
+                <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-accent text-accent-foreground">
+                  <CheckCircle2 className="h-8 w-8" />
+                </div>
+                <h2 className="mt-4 text-2xl font-bold">Consulta confirmada!</h2>
+                <p className="mt-2 text-muted-foreground">
+                  {selected && (
+                    <>Sua consulta é em <strong>{formatarDataBR(selected.data)}</strong> às <strong>{selected.horario}</strong>.</>
+                  )}
+                </p>
+                <div className="mt-4 inline-block rounded-lg bg-muted px-4 py-2 text-sm">
+                  Protocolo: <strong>{protocolo}</strong>
+                </div>
+                <div className="mt-8">
+                  <Button
+                    onClick={() => {
+                      setStep(1);
+                      setSelected(null);
+                      setDataSelecionada(null);
+                      setProtocolo(null);
+                      form.reset();
+                    }}
+                  >
+                    Fazer novo agendamento
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </section>
     </AppShell>
   );
 }
 
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
+function SectionTitle({ icon: Icon, title }: { icon: typeof Clock; title: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground">
+        <Icon className="h-5 w-5" />
+      </span>
+      <h2 className="text-xl font-semibold">{title}</h2>
+    </div>
+  );
+}
+
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</Label>
       {children}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
@@ -296,29 +306,33 @@ function Field({
 }
 
 function Stepper({ step }: { step: 1 | 2 | 3 }) {
-  const items = ["Horário", "Dados", "Confirmação"];
+  const items = ["Data", "Dados", "Confirmação"];
   return (
-    <ol className="mb-6 flex items-center gap-2">
+    <ol className="grid grid-cols-3 gap-2 border-b pb-4">
       {items.map((label, i) => {
         const n = (i + 1) as 1 | 2 | 3;
         const active = step === n;
         const done = step > n;
         return (
-          <li key={label} className="flex items-center gap-2">
+          <li key={label} className="flex flex-col items-center gap-2">
             <span
               className={cn(
-                "h-8 w-8 grid place-items-center rounded-full text-sm font-semibold border",
-                done && "bg-primary text-primary-foreground border-primary",
-                active && "bg-primary/10 text-primary border-primary",
-                !done && !active && "bg-card text-muted-foreground"
+                "grid h-8 w-8 place-items-center rounded-full border text-sm font-semibold",
+                done && "border-primary bg-primary text-primary-foreground",
+                active && "border-primary bg-primary/15 text-foreground",
+                !done && !active && "bg-card text-muted-foreground",
               )}
             >
               {n}
             </span>
-            <span className={cn("text-sm", active ? "text-foreground font-medium" : "text-muted-foreground")}>
+            <span
+              className={cn(
+                "text-[10px] uppercase tracking-widest",
+                active ? "font-semibold text-foreground" : "text-muted-foreground",
+              )}
+            >
               {label}
             </span>
-            {i < items.length - 1 && <span className="w-6 h-px bg-border mx-1" />}
           </li>
         );
       })}

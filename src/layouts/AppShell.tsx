@@ -1,71 +1,52 @@
-import { Link, Outlet, useLocation } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { Calendar, CalendarPlus, Search, XCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
+import logo from "@/assets/logo-lucas.png.asset.json";
 
-const NAV_ITEMS = [
-  { to: "/", label: "Início" },
-  { to: "/agendar", label: "Agendar" },
-  { to: "/consulta", label: "Minhas consultas" },
-  { to: "/cancelar", label: "Cancelar" },
+const nav = [
+  { to: "/", label: "Início", icon: Calendar },
+  { to: "/agendar", label: "Agendar", icon: CalendarPlus },
+  { to: "/consulta", label: "Minhas consultas", icon: Search },
+  { to: "/cancelar", label: "Cancelar", icon: XCircle },
 ];
 
-export function HeroBanner({
-  title,
-  subtitle,
-}: {
-  title: string;
-  subtitle?: string;
-}) {
-  return (
-    <div className="bg-[#1C1814] text-white py-12 px-4 border-b border-[#2A241F]">
-      <div className="container mx-auto text-center">
-        <h1 className="font-serif text-3xl md:text-4xl font-bold mb-2 text-[#E8C872]">
-          {title}
-        </h1>
-        {subtitle && (
-          <p className="text-[#C4B29E] text-sm md:text-base max-w-xl mx-auto font-light">
-            {subtitle}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export function AppShell() {
-  const location = useLocation();
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   return (
-    <div className="min-h-screen bg-background font-sans antialiased flex flex-col">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            {/* Logo Estilizada integrada diretamente nos estilos da marca */}
-            <div className="w-10 h-10 rounded-full bg-[#E8C872] flex items-center justify-center text-[#1C1814] font-bold text-base shadow-sm">
-              LM
-            </div>
-            <div className="flex flex-col">
-              <span className="font-semibold text-sm leading-tight text-foreground">
-                Dr. Lucas Monteiro
-              </span>
-              <span className="text-[10px] text-muted-foreground tracking-wider uppercase">
-                ODONTOLOGIA ESPECIALIZADA
-              </span>
+    <div className="min-h-screen flex flex-col bg-background">
+      <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur">
+        <div className="mx-auto max-w-6xl px-4 h-16 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+          <Link to="/" className="flex min-w-0 items-center gap-3">
+            <img
+              src={logo.url}
+              alt="Logotipo Dr. Lucas Monteiro Odontologia Especializada"
+              className="h-10 w-auto shrink-0 object-contain"
+              width={40}
+              height={40}
+            />
+            <div className="min-w-0 leading-tight">
+              <div className="truncate font-semibold text-foreground">Dr. Lucas Monteiro</div>
+              <div className="truncate text-[10px] tracking-[0.18em] uppercase text-muted-foreground">
+                Odontologia Especializada
+              </div>
             </div>
           </Link>
-
-          <nav className="flex items-center gap-1 sm:gap-2">
-            {NAV_ITEMS.map((item) => {
-              const isActive = location.pathname === item.to;
+          <nav className="hidden md:flex items-center gap-1">
+            {nav.map((n) => {
+              const active = pathname === n.to;
               return (
                 <Link
-                  key={item.to}
-                  to={item.to}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                  }`}
+                  key={n.to}
+                  to={n.to}
+                  className={cn(
+                    "px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                    active
+                      ? "bg-primary/15 text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                  )}
                 >
-                  {item.label}
+                  {n.label}
                 </Link>
               );
             })}
@@ -73,9 +54,45 @@ export function AppShell() {
         </div>
       </header>
 
-      <main className="flex-1">
-        <Outlet />
-      </main>
+      <main className="flex-1">{children}</main>
+
+      <nav className="md:hidden sticky bottom-0 z-40 border-t bg-card">
+        <div className="grid grid-cols-4">
+          {nav.map((n) => {
+            const active = pathname === n.to;
+            const Icon = n.icon;
+            return (
+              <Link
+                key={n.to}
+                to={n.to}
+                className={cn(
+                  "flex flex-col items-center gap-1 py-2 text-[11px]",
+                  active ? "text-primary" : "text-muted-foreground",
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                {n.label}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
+      <footer className="hidden md:block border-t bg-hero py-6 text-center text-xs text-hero-foreground/70">
+        © {new Date().getFullYear()} Dr. Lucas Monteiro — Odontologia Especializada
+      </footer>
+    </div>
+  );
+}
+
+/** Faixa escura de topo com título dourado, igual ao modelo de referência. */
+export function HeroBanner({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="bg-hero">
+      <div className="mx-auto max-w-4xl px-4 pt-12 pb-24 text-center">
+        <h1 className="text-3xl md:text-5xl font-semibold text-primary">{title}</h1>
+        {subtitle && <p className="mt-3 text-sm md:text-base text-hero-foreground/70">{subtitle}</p>}
+      </div>
     </div>
   );
 }

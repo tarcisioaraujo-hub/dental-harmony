@@ -89,6 +89,10 @@ function handleRequest(action, payload) {
       case 'buscar-consulta':
         return json(ok(buscarConsulta(payload)));
 
+      case 'buscar-consultas':
+        return json(ok(buscarConsultas(payload)));
+
+
       case 'agendar':
         return json(ok(agendar(payload)));
 

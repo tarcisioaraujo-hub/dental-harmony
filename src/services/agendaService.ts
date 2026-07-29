@@ -1,10 +1,8 @@
 import type { Agendamento, HorarioDisponivel } from "@/types/agenda";
 import { upperPayload } from "@/lib/format";
 
-// URL do Google Apps Script com Fallback direto para produção
 const API_URL_FALLBACK = "https://script.google.com/macros/s/AKfycbzaUC5bsk1V9-lI1dv3lau1o3chjYiPCQp08FOK9ra7TfMvf94FHBQ2hq-C1R3-HaUf/exec";
 
-// Pega a URL da variável de ambiente com Fallback seguro
 const getApiUrl = () => {
   const url = import.meta.env.VITE_API_URL || API_URL_FALLBACK;
   return url.trim();
@@ -12,12 +10,9 @@ const getApiUrl = () => {
 
 async function postAction<T>(action: string, payload: Record<string, unknown>): Promise<T> {
   const baseUrl = getApiUrl();
-  if (!baseUrl) throw new Error("URL da API não configurada");
-
   const response = await fetch(baseUrl, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
-    // REGRA: tudo que vai para a planilha é enviado em MAIÚSCULAS
     body: JSON.stringify({ action, ...upperPayload(payload) }),
     redirect: "follow",
   });
@@ -29,29 +24,38 @@ async function postAction<T>(action: string, payload: Record<string, unknown>): 
 
 async function getAction<T>(action: string, params: Record<string, string> = {}): Promise<T> {
   const baseUrl = getApiUrl();
-  if (!baseUrl) throw new Error("URL da API não configurada");
-
   const query = new URLSearchParams({ action, ...upperPayload(params) }).toString();
-  const response = await fetch(`${baseUrl}?${query}`, { method: "GET", redirect: "follow" });
+  
+  const response = await fetch(`${baseUrl}?${query}`, { 
+    method: "GET", 
+    redirect: "follow" 
+  });
+  
   if (!response.ok) throw new Error(`Erro na rede: ${response.status}`);
 
   const result = await response.json();
   if (result && result.ok) return result.data as T;
   if (Array.isArray(result)) return result as unknown as T;
+  if (result && result.data) return result.data as T;
+  
   throw new Error(result?.error || "Formato de dados inválido retornado pela API");
 }
 
 export const agendaService = {
   async listarHorariosDisponiveis(): Promise<HorarioDisponivel[]> {
-    const data = await getAction<HorarioDisponivel[]>("horarios-disponiveis");
-    return Array.isArray(data) ? data : [];
+    try {
+      const data = await getAction<HorarioDisponivel[]>("horarios-disponiveis");
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error("Erro ao buscar horários:", error);
+      return [];
+    }
   },
 
   agendar(payload: Omit<Agendamento, "dataAgendamento" | "status" | "protocolo">) {
     return postAction<Agendamento>("agendar", payload);
   },
 
-  /** Retorna TODAS as consultas do paciente (nome obrigatório, CPF opcional). */
   async buscarConsultas(params: { nomeCompleto: string; cpf?: string }): Promise<Agendamento[]> {
     const data = await getAction<Agendamento[] | Agendamento>("buscar-consultas", {
       nomeCompleto: params.nomeCompleto,

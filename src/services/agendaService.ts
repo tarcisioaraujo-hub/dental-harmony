@@ -1,5 +1,4 @@
 import type { Agendamento, HorarioDisponivel } from "@/types/agenda";
-import { upperPayload } from "@/lib/format";
 
 const API_URL_FALLBACK = "https://script.google.com/macros/s/AKfycbzaUC5bsk1V9-lI1dv3lau1o3chjYiPCQp08FOK9ra7TfMvf94FHBQ2hq-C1R3-HaUf/exec";
 
@@ -13,7 +12,7 @@ async function postAction<T>(action: string, payload: Record<string, unknown>): 
   const response = await fetch(baseUrl, {
     method: "POST",
     headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify({ action, ...upperPayload(payload) }),
+    body: JSON.stringify({ action, ...payload }), // Removido upperPayload para manter a escrita original
     redirect: "follow",
   });
 
@@ -24,7 +23,7 @@ async function postAction<T>(action: string, payload: Record<string, unknown>): 
 
 async function getAction<T>(action: string, params: Record<string, string> = {}): Promise<T> {
   const baseUrl = getApiUrl();
-  const query = new URLSearchParams({ action, ...upperPayload(params) }).toString();
+  const query = new URLSearchParams({ action, ...params }).toString(); // Removido upperPayload
   
   const response = await fetch(`${baseUrl}?${query}`, { 
     method: "GET", 

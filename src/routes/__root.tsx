@@ -79,16 +79,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "OdontoAgenda — Agendamento online para consultórios odontológicos" },
-      { name: "description", content: "Agende sua consulta odontológica online de forma rápida, segura e sem complicações." },
-      { property: "og:title", content: "OdontoAgenda — Agendamento online" },
-      { property: "og:description", content: "Consulte horários disponíveis e agende sua consulta odontológica em poucos cliques." },
+      { title: "Dr. Lucas Monteiro — Odontologia Especializada" },
+      { name: "description", content: "Agende sua consulta com Dr. Lucas Monteiro. Atendimento odontológico especializado de forma rápida e segura." },
+      { property: "og:title", content: "Dr. Lucas Monteiro — Odontologia Especializada" },
+      { property: "og:description", content: "Consulte horários disponíveis e agende sua consulta odontológica com Dr. Lucas Monteiro." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/logo_lucas.png", type: "image/png" },
     ],
   }),
 
@@ -100,7 +100,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR">
       <head>
         <HeadContent />
       </head>
@@ -122,4 +122,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-
